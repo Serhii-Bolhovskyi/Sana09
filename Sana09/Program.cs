@@ -13,53 +13,126 @@ class Program
     // Ukrainian Box Office For 2024
     static public async Task<int> GetTotalGrosses()
     {
-        var response = await HttpHelper.HttpClientBoxOffice.GetStringAsync(HttpHelper.BoxOfficeUrl);
-        int total = 0;
-
-        string pattern = @"\$[\d,]+";
-        
-        MatchCollection matches = Regex.Matches(response, pattern);
-
-        foreach (Match match in matches)
+        Console.WriteLine("Починаємо завантаження  Box Office в Україні 2024...");
+        try
         {
-            string numberString = match.Value.Replace("$", "").Replace(",", "");
-            if (int.TryParse(numberString, out int value))
+            var response = await HttpHelper.HttpClientBoxOffice.GetStringAsync(HttpHelper.BoxOfficeUrl);
+            int total = 0;
+
+            string pattern = @"\$[\d,]+";
+
+            MatchCollection matches = Regex.Matches(response, pattern);
+
+            foreach (Match match in matches)
             {
-                total += value;
+                string numberString = match.Value.Replace("$", "").Replace(",", "");
+                if (int.TryParse(numberString, out int value))
+                {
+                    total += value;
+                }
             }
+            
+            return total;
         }
-        Console.WriteLine($"Загальний BoxOffice: ${total}");
-        return total;
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Не вдалося отримати дані: {ex.Message}");
+            return 0;
+        }
     }
 
     // All Movies in Ukrainian Box Office For 2024
     static public async Task<int> CountMoviesOnPage()
     {
-        var response = await HttpHelper.HttpClientBoxOffice.GetStringAsync(HttpHelper.BoxOfficeUrl);
-        if (string.IsNullOrWhiteSpace(response))
+        Console.WriteLine("Починаємо підрахунок усіх фільмів в Box Office в Україні 2024...");
+        try
         {
-            Console.WriteLine("Помилка: Порожня відповідь від сервера.");
+            var response = await HttpHelper.HttpClientBoxOffice.GetStringAsync(HttpHelper.BoxOfficeUrl);
+            if (string.IsNullOrWhiteSpace(response))
+            {
+                Console.WriteLine("Помилка: Порожня відповідь від сервера.");
+                return 0;
+            }
+
+            string pattern = @"<td class=""a-text-left mojo-field-type-release mojo-cell-wide""[^>]*><a class=""a-link-normal""[^>]*>(.*?)</a></td>";
+        
+            int totalPages = Regex.Matches(response, pattern).Count;
+        
+            return totalPages;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Не вдалося підрахувати фільми: {ex.Message}");
             return 0;
         }
+    }
+    
+    // Current temperature
+    static public async Task<string> GetCurrentTemp()
+    {
+        Console.WriteLine("Починаємо отримання температури...");
+        try
+        {
+            using HttpClient httpClient = new();
+            string url = "https://meteofor.com.ua/weather-kyiv-4944/";
+            var response = await httpClient.GetStringAsync(url);
 
-        string pattern = @"<td class=""a-text-left mojo-field-type-release mojo-cell-wide""[^>]*><a class=""a-link-normal""[^>]*>(.*?)</a></td>";
+            string pattern = @"<temperature-value[^>]*value=""(-?\d+)""";
+
+            Match match = Regex.Match(response, pattern);
+
+            if (match.Success)
+            {
+                string temperature = match.Groups[1].Value + "°C";
+                return temperature;
+            }
+            else
+            {
+                throw new Exception("Не вдалося знайти температуру");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Не вдалося отримати температуру: {ex.Message}");
+            return "Н/Д"; 
+        }
+    }
+    
+    // Count symbol in string
+    static public int AmountOfSymbolInStr(string input)
+    {
+        string pattern = @"\S+"; 
+        MatchCollection matches = Regex.Matches(input, pattern);
+
+        int count = 0;
+        foreach (Match match in matches)
+        {
+            count += match.Value.Length;
+        }
         
-        int totalPages = Regex.Matches(response, pattern).Count;
-        Console.WriteLine($"Загальну к-ть фільмів: {totalPages}");
-        
-        return totalPages;
+        return count;
     }
     static async Task Main()
     {
-        var tasks = new List<Task>
+        Console.WriteLine("Початок роботи програми!");
+        
+        var tasks = new List<Task<object>>
         {
-            GetTotalGrosses(),
-            CountMoviesOnPage()
+            Task.Run<object>(async () => await GetTotalGrosses()),
+            Task.Run<object>(async () => await CountMoviesOnPage()),
+            Task.Run<object>(async () => await GetCurrentTemp())
         };
         
-        await Task.WhenAll(tasks);
+        // Демонстрація, що асинхронний код не блокує виконання основного потоку
+        string text = "Hello World!";
+        int total = AmountOfSymbolInStr(text);
+        Console.WriteLine($"Головний потік працює! Кількість символів у рядку: {total}");
+        
+        var results = await Task.WhenAll(tasks);
         Console.WriteLine("Всі запити завершено!");
         
-        
+        Console.WriteLine($"Загальний BoxOffice: ${(int)results[0]}");
+        Console.WriteLine($"Кількість фільмів: {(int)results[1]}");
+        Console.WriteLine($"Температура у Києві: {(string)results[2]}");
     }
 }
